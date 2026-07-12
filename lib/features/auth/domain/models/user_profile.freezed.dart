@@ -31,6 +31,14 @@ mixin _$UserProfile {
   String? get avatarUrl => throw _privateConstructorUsedError;
   bool get isProfileComplete => throw _privateConstructorUsedError;
   String? get startupId => throw _privateConstructorUsedError;
+  StartupVerificationMethod? get startupVerificationMethod =>
+      throw _privateConstructorUsedError;
+  String? get startupVerificationReference =>
+      throw _privateConstructorUsedError;
+  @FirestoreTimestampConverter()
+  DateTime get createdAt => throw _privateConstructorUsedError;
+  @FirestoreTimestampConverter()
+  DateTime get updatedAt => throw _privateConstructorUsedError;
 
   /// Serializes this UserProfile to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -60,6 +68,10 @@ abstract class $UserProfileCopyWith<$Res> {
     String? avatarUrl,
     bool isProfileComplete,
     String? startupId,
+    StartupVerificationMethod? startupVerificationMethod,
+    String? startupVerificationReference,
+    @FirestoreTimestampConverter() DateTime createdAt,
+    @FirestoreTimestampConverter() DateTime updatedAt,
   });
 }
 
@@ -88,6 +100,10 @@ class _$UserProfileCopyWithImpl<$Res, $Val extends UserProfile>
     Object? avatarUrl = freezed,
     Object? isProfileComplete = null,
     Object? startupId = freezed,
+    Object? startupVerificationMethod = freezed,
+    Object? startupVerificationReference = freezed,
+    Object? createdAt = null,
+    Object? updatedAt = null,
   }) {
     return _then(
       _value.copyWith(
@@ -131,6 +147,23 @@ class _$UserProfileCopyWithImpl<$Res, $Val extends UserProfile>
                 ? _value.startupId
                 : startupId // ignore: cast_nullable_to_non_nullable
                       as String?,
+            startupVerificationMethod: freezed == startupVerificationMethod
+                ? _value.startupVerificationMethod
+                : startupVerificationMethod // ignore: cast_nullable_to_non_nullable
+                      as StartupVerificationMethod?,
+            startupVerificationReference:
+                freezed == startupVerificationReference
+                ? _value.startupVerificationReference
+                : startupVerificationReference // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            createdAt: null == createdAt
+                ? _value.createdAt
+                : createdAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime,
+            updatedAt: null == updatedAt
+                ? _value.updatedAt
+                : updatedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime,
           )
           as $Val,
     );
@@ -157,6 +190,10 @@ abstract class _$$UserProfileImplCopyWith<$Res>
     String? avatarUrl,
     bool isProfileComplete,
     String? startupId,
+    StartupVerificationMethod? startupVerificationMethod,
+    String? startupVerificationReference,
+    @FirestoreTimestampConverter() DateTime createdAt,
+    @FirestoreTimestampConverter() DateTime updatedAt,
   });
 }
 
@@ -184,6 +221,10 @@ class __$$UserProfileImplCopyWithImpl<$Res>
     Object? avatarUrl = freezed,
     Object? isProfileComplete = null,
     Object? startupId = freezed,
+    Object? startupVerificationMethod = freezed,
+    Object? startupVerificationReference = freezed,
+    Object? createdAt = null,
+    Object? updatedAt = null,
   }) {
     return _then(
       _$UserProfileImpl(
@@ -227,6 +268,22 @@ class __$$UserProfileImplCopyWithImpl<$Res>
             ? _value.startupId
             : startupId // ignore: cast_nullable_to_non_nullable
                   as String?,
+        startupVerificationMethod: freezed == startupVerificationMethod
+            ? _value.startupVerificationMethod
+            : startupVerificationMethod // ignore: cast_nullable_to_non_nullable
+                  as StartupVerificationMethod?,
+        startupVerificationReference: freezed == startupVerificationReference
+            ? _value.startupVerificationReference
+            : startupVerificationReference // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        createdAt: null == createdAt
+            ? _value.createdAt
+            : createdAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime,
+        updatedAt: null == updatedAt
+            ? _value.updatedAt
+            : updatedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime,
       ),
     );
   }
@@ -246,6 +303,10 @@ class _$UserProfileImpl implements _UserProfile {
     this.avatarUrl,
     this.isProfileComplete = false,
     this.startupId,
+    this.startupVerificationMethod,
+    this.startupVerificationReference,
+    @FirestoreTimestampConverter() required this.createdAt,
+    @FirestoreTimestampConverter() required this.updatedAt,
   }) : _skills = skills,
        _portfolioUrls = portfolioUrls;
 
@@ -287,10 +348,20 @@ class _$UserProfileImpl implements _UserProfile {
   final bool isProfileComplete;
   @override
   final String? startupId;
+  @override
+  final StartupVerificationMethod? startupVerificationMethod;
+  @override
+  final String? startupVerificationReference;
+  @override
+  @FirestoreTimestampConverter()
+  final DateTime createdAt;
+  @override
+  @FirestoreTimestampConverter()
+  final DateTime updatedAt;
 
   @override
   String toString() {
-    return 'UserProfile(id: $id, role: $role, fullName: $fullName, aluEmail: $aluEmail, bio: $bio, skills: $skills, portfolioUrls: $portfolioUrls, avatarUrl: $avatarUrl, isProfileComplete: $isProfileComplete, startupId: $startupId)';
+    return 'UserProfile(id: $id, role: $role, fullName: $fullName, aluEmail: $aluEmail, bio: $bio, skills: $skills, portfolioUrls: $portfolioUrls, avatarUrl: $avatarUrl, isProfileComplete: $isProfileComplete, startupId: $startupId, startupVerificationMethod: $startupVerificationMethod, startupVerificationReference: $startupVerificationReference, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -315,7 +386,22 @@ class _$UserProfileImpl implements _UserProfile {
             (identical(other.isProfileComplete, isProfileComplete) ||
                 other.isProfileComplete == isProfileComplete) &&
             (identical(other.startupId, startupId) ||
-                other.startupId == startupId));
+                other.startupId == startupId) &&
+            (identical(
+                  other.startupVerificationMethod,
+                  startupVerificationMethod,
+                ) ||
+                other.startupVerificationMethod == startupVerificationMethod) &&
+            (identical(
+                  other.startupVerificationReference,
+                  startupVerificationReference,
+                ) ||
+                other.startupVerificationReference ==
+                    startupVerificationReference) &&
+            (identical(other.createdAt, createdAt) ||
+                other.createdAt == createdAt) &&
+            (identical(other.updatedAt, updatedAt) ||
+                other.updatedAt == updatedAt));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -332,6 +418,10 @@ class _$UserProfileImpl implements _UserProfile {
     avatarUrl,
     isProfileComplete,
     startupId,
+    startupVerificationMethod,
+    startupVerificationReference,
+    createdAt,
+    updatedAt,
   );
 
   /// Create a copy of UserProfile
@@ -360,6 +450,10 @@ abstract class _UserProfile implements UserProfile {
     final String? avatarUrl,
     final bool isProfileComplete,
     final String? startupId,
+    final StartupVerificationMethod? startupVerificationMethod,
+    final String? startupVerificationReference,
+    @FirestoreTimestampConverter() required final DateTime createdAt,
+    @FirestoreTimestampConverter() required final DateTime updatedAt,
   }) = _$UserProfileImpl;
 
   factory _UserProfile.fromJson(Map<String, dynamic> json) =
@@ -385,6 +479,16 @@ abstract class _UserProfile implements UserProfile {
   bool get isProfileComplete;
   @override
   String? get startupId;
+  @override
+  StartupVerificationMethod? get startupVerificationMethod;
+  @override
+  String? get startupVerificationReference;
+  @override
+  @FirestoreTimestampConverter()
+  DateTime get createdAt;
+  @override
+  @FirestoreTimestampConverter()
+  DateTime get updatedAt;
 
   /// Create a copy of UserProfile
   /// with the given fields replaced by the non-null parameter values.

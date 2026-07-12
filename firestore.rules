@@ -1,0 +1,146 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function isFounder(uid) {
+      return userDoc(uid).data.role == 'startup_founder';
+    }
+
+    function hasStartup(uid) {
+      return userDoc(uid).data.startupId is string && userDoc(uid).data.startupId.size() > 0;
+    }
+
+    function isStartupFounderFor(startupId) {
+      return isSignedIn()
+        && isFounder(request.auth.uid)
+        && hasStartup(request.auth.uid)
+        && userDoc(request.auth.uid).data.startupId == startupId;
+    }
+
+    function hasAllowedUserKeys() {
+      return request.resource.data.keys().hasOnly([
+        'id',
+        'role',
+        'fullName',
+        'aluEmail',
+        'bio',
+        'skills',
+        'portfolioUrls',
+        'avatarUrl',
+        'isProfileComplete',
+        'startupId',
+        'startupVerificationMethod',
+        'startupVerificationReference',
+        'createdAt',
+        'updatedAt',
+      ]);
+    }
+
+    function hasAllowedStartupKeys() {
+      return request.resource.data.keys().hasOnly([
+        'id',
+        'name',
+        'logoUrl',
+        'isAluVerified',
+        'founderIds',
+        'teamSize',
+        'description',
+        'categories',
+        'status',
+        'createdAt',
+        'updatedAt',
+      ]);
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && hasAllowedUserKeys()
+        && request.resource.data.id == uid
+        && request.resource.data.aluEmail.matches('.*@(alueducation\\.com|alu\\.edu)$');
+
+      allow update: if isOwner(uid)
+        && hasAllowedUserKeys()
+        && request.resource.data.id == uid
+        && request.resource.data.aluEmail == resource.data.aluEmail
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.startupId == resource.data.startupId;
+    }
+
+    match /startup_verification_registry/{token} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    match /startups/{startupId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && isFounder(request.auth.uid)
+        && !hasStartup(request.auth.uid)
+        && hasAllowedStartupKeys()
+        && request.resource.data.id == startupId
+        && request.resource.data.founderIds.hasOnly([request.auth.uid]);
+
+      allow update: if isStartupFounderFor(startupId)
+        && hasAllowedStartupKeys()
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if false;
+    }
+
+    match /opportunities/{opportunityId} {
+      allow read: if isSignedIn();
+      allow create, update: if isStartupFounderFor(request.resource.data.startupId);
+      allow delete: if isStartupFounderFor(resource.data.startupId);
+
+      match /applications/{applicationId} {
+        allow read: if isSignedIn() && (
+          request.auth.uid == resource.data.studentId
+          || isStartupFounderFor(resource.data.startupId)
+        );
+
+        allow create: if isSignedIn()
+          && request.resource.data.studentId == request.auth.uid
+          && request.resource.data.status == 'pending';
+
+        allow update: if isStartupFounderFor(resource.data.startupId)
+          && request.resource.data.studentId == resource.data.studentId
+          && request.resource.data.opportunityId == resource.data.opportunityId
+          && request.resource.data.startupId == resource.data.startupId;
+      }
+    }
+
+    match /applications/{applicationId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.studentId
+        || isStartupFounderFor(resource.data.startupId)
+      );
+
+      allow create: if isSignedIn()
+        && request.resource.data.studentId == request.auth.uid
+        && request.resource.data.status == 'pending';
+
+      allow update: if isStartupFounderFor(resource.data.startupId)
+        && request.resource.data.studentId == resource.data.studentId
+        && request.resource.data.opportunityId == resource.data.opportunityId
+        && request.resource.data.startupId == resource.data.startupId;
+
+      allow delete: if false;
+    }
+  }
+}

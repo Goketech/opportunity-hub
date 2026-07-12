@@ -1,20 +1,95 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:opportunity_hub/features/auth/domain/models/user_profile.dart';
+import 'package:opportunity_hub/features/auth/presentation/pages/login_page.dart';
+import 'package:opportunity_hub/features/auth/presentation/pages/onboarding_page.dart';
+import 'package:opportunity_hub/features/auth/presentation/pages/signup_page.dart';
+import 'package:opportunity_hub/features/auth/presentation/state/auth_notifier.dart';
+import 'package:opportunity_hub/features/auth/presentation/state/auth_state.dart';
+import 'package:opportunity_hub/features/opportunities/presentation/pages/startup_listings_page.dart';
+import 'package:opportunity_hub/features/opportunities/presentation/pages/student_opportunities_page.dart';
+import 'package:opportunity_hub/features/startups/presentation/pages/startup_setup_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final refreshListenable = _RouterRefreshListenable(ref);
+  ref.onDispose(refreshListenable.dispose);
+
   return GoRouter(
-    initialLocation: AppRoutes.login,
+    initialLocation: AppRoutes.splash,
+    refreshListenable: refreshListenable,
+    redirect: (context, state) {
+      final location = state.matchedLocation;
+      final authAsync = ref.read(authNotifierProvider);
+
+      if (authAsync.isLoading) {
+        return location == AppRoutes.splash ? null : AppRoutes.splash;
+      }
+
+      final authState = authAsync.valueOrNull;
+      if (authState == null || authState is AuthLoading) {
+        return location == AppRoutes.splash ? null : AppRoutes.splash;
+      }
+
+      if (authState is AuthUnauthenticated) {
+        if (location == AppRoutes.login || location == AppRoutes.signup) {
+          return null;
+        }
+        return AppRoutes.login;
+      }
+
+      if (authState is AuthOnboardingRequired) {
+        return location == AppRoutes.onboarding ? null : AppRoutes.onboarding;
+      }
+
+      if (authState is AuthAuthenticated) {
+        final needsStartupSetup = authState.profile.role == UserRole.startupFounder &&
+            (authState.profile.startupId == null || authState.profile.startupId!.isEmpty);
+        if (needsStartupSetup) {
+          return location == AppRoutes.startupSetup
+              ? null
+              : AppRoutes.startupSetup;
+        }
+
+        final target = authState.profile.role == UserRole.startupFounder
+            ? AppRoutes.startupHome
+            : AppRoutes.studentHome;
+        if (location == AppRoutes.login ||
+            location == AppRoutes.signup ||
+            location == AppRoutes.splash ||
+            location == AppRoutes.onboarding ||
+            location == AppRoutes.startupSetup) {
+          return target;
+        }
+      }
+
+      return null;
+    },
     routes: [
+      GoRoute(
+        path: AppRoutes.splash,
+        name: 'splash',
+        builder: (context, state) => const _SplashPage(),
+      ),
       GoRoute(
         path: AppRoutes.login,
         name: 'login',
-        builder: (context, state) => const _LoginPage(),
+        builder: (context, state) => const LoginPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.signup,
+        name: 'signup',
+        builder: (context, state) => const SignupPage(),
       ),
       GoRoute(
         path: AppRoutes.onboarding,
         name: 'onboarding',
-        builder: (context, state) => const _OnboardingPage(),
+        builder: (context, state) => const OnboardingPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.startupSetup,
+        name: 'startup-setup',
+        builder: (context, state) => const StartupSetupPage(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
@@ -55,7 +130,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.studentOpportunities,
                 name: 'student-opportunities',
-                builder: (context, state) => const _StudentOpportunitiesPage(),
+                builder: (context, state) => const StudentOpportunitiesPage(),
               ),
             ],
           ),
@@ -109,7 +184,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.startupListings,
                 name: 'startup-listings',
-                builder: (context, state) => const _StartupListingsPage(),
+                builder: (context, state) => const StartupListingsPage(),
               ),
             ],
           ),
@@ -129,8 +204,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 });
 
 final class AppRoutes {
+  static const String splash = '/splash';
   static const String login = '/login';
+  static const String signup = '/signup';
   static const String onboarding = '/onboarding';
+  static const String startupSetup = '/onboarding/startup-setup';
 
   static const String studentHome = '/student/home';
   static const String studentOpportunities = '/student/opportunities';
@@ -171,67 +249,13 @@ class _DashboardShell extends StatelessWidget {
   }
 }
 
-class _LoginPage extends StatelessWidget {
-  const _LoginPage();
+class _SplashPage extends StatelessWidget {
+  const _SplashPage();
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Login')),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Text(
-            'Sign in to continue to Opportunity Hub.',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () => context.go(AppRoutes.onboarding),
-            child: const Text('Continue to Onboarding'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: () => context.go(AppRoutes.studentHome),
-            child: const Text('Open Student Dashboard'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: () => context.go(AppRoutes.startupHome),
-            child: const Text('Open Startup Dashboard'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OnboardingPage extends StatelessWidget {
-  const _OnboardingPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Onboarding')),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Text(
-            'Choose the role profile to personalize your experience.',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () => context.go(AppRoutes.studentHome),
-            child: const Text('I am a Student'),
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: () => context.go(AppRoutes.startupHome),
-            child: const Text('I represent a Startup'),
-          ),
-        ],
-      ),
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
     );
   }
 }
@@ -245,19 +269,6 @@ class _StudentHomePage extends StatelessWidget {
       title: 'Student Home',
       description:
           'Track recommended startups, profile progress, and internship readiness.',
-    );
-  }
-}
-
-class _StudentOpportunitiesPage extends StatelessWidget {
-  const _StudentOpportunitiesPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _SectionPage(
-      title: 'Opportunities',
-      description:
-          'Explore internships from verified student-led startups across the ALU ecosystem.',
     );
   }
 }
@@ -282,18 +293,6 @@ class _StartupHomePage extends StatelessWidget {
     return const _SectionPage(
       title: 'Startup Overview',
       description: 'Monitor talent pipeline performance and internship engagement.',
-    );
-  }
-}
-
-class _StartupListingsPage extends StatelessWidget {
-  const _StartupListingsPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _SectionPage(
-      title: 'Listings',
-      description: 'Publish and manage internship opportunities visible to ALU students.',
     );
   }
 }
@@ -330,5 +329,24 @@ class _SectionPage extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _RouterRefreshListenable extends ChangeNotifier {
+  _RouterRefreshListenable(this.ref) {
+    _subscription = ref.listen<AsyncValue<AuthState>>(
+      authNotifierProvider,
+      (previous, next) => notifyListeners(),
+      fireImmediately: false,
+    );
+  }
+
+  final Ref ref;
+  ProviderSubscription<AsyncValue<AuthState>>? _subscription;
+
+  @override
+  void dispose() {
+    _subscription?.close();
+    super.dispose();
   }
 }
