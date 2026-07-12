@@ -5,12 +5,32 @@ import 'package:opportunity_hub/features/auth/presentation/state/auth_state.dart
 import 'package:opportunity_hub/features/opportunities/data/opportunity_repository.dart';
 import 'package:opportunity_hub/features/opportunities/domain/models/opportunity_model.dart';
 import 'package:opportunity_hub/features/opportunities/presentation/state/opportunity_providers.dart';
+import 'package:opportunity_hub/features/opportunities/presentation/screens/founder_applications_screen.dart';
 
-class StartupListingsPage extends ConsumerWidget {
+class StartupListingsPage extends ConsumerStatefulWidget {
   const StartupListingsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StartupListingsPage> createState() => _StartupListingsPageState();
+}
+
+class _StartupListingsPageState extends ConsumerState<StartupListingsPage> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authNotifierProvider).valueOrNull;
     final startupId = authState is AuthAuthenticated ? authState.profile.startupId : null;
 
@@ -20,58 +40,87 @@ class StartupListingsPage extends ConsumerWidget {
       );
     }
 
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Startup Dashboard'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.list), text: 'Listings'),
+            Tab(icon: Icon(Icons.mail), text: 'Applications'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _ListingsTab(startupId: startupId),
+          const FounderApplicationsScreen(),
+        ],
+      ),
+      floatingActionButton: _tabController.index == 0
+          ? FloatingActionButton.extended(
+              onPressed: () {
+                showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  useSafeArea: true,
+                  builder: (context) {
+                    return FractionallySizedBox(
+                      heightFactor: 0.95,
+                      child: _OpportunityCreationWizard(startupId: startupId),
+                    );
+                  },
+                );
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Post Opportunity'),
+            )
+          : null,
+    );
+  }
+}
+
+class _ListingsTab extends ConsumerWidget {
+  final String startupId;
+
+  const _ListingsTab({required this.startupId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final opportunitiesAsync = ref.watch(founderOpportunitiesProvider);
 
-    return Scaffold(
-      body: opportunitiesAsync.when(
-        data: (items) {
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-            children: [
-              Text(
-                'Your internship listings',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Create opportunities and track active postings in real-time.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 16),
-              if (items.isEmpty)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text('No listings yet. Tap Post Opportunity to begin.'),
-                  ),
-                )
-              else
-                ...items.map((item) => _FounderOpportunityCard(opportunity: item)),
-            ],
-          );
-        },
-        error: (error, _) => Center(
-          child: Text('Failed to load startup listings: $error'),
-        ),
-        loading: () => const Center(child: CircularProgressIndicator()),
+    return opportunitiesAsync.when(
+      data: (items) {
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+          children: [
+            Text(
+              'Your internship listings',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Create opportunities and track active postings in real-time.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            if (items.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No listings yet. Tap Post Opportunity to begin.'),
+                ),
+              )
+            else
+              ...items.map((item) => _FounderOpportunityCard(opportunity: item)),
+          ],
+        );
+      },
+      error: (error, _) => Center(
+        child: Text('Failed to load startup listings: $error'),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          showModalBottomSheet<void>(
-            context: context,
-            isScrollControlled: true,
-            useSafeArea: true,
-            builder: (context) {
-              return FractionallySizedBox(
-                heightFactor: 0.95,
-                child: _OpportunityCreationWizard(startupId: startupId),
-              );
-            },
-          );
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Post Opportunity'),
-      ),
+      loading: () => const Center(child: CircularProgressIndicator()),
     );
   }
 }

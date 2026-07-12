@@ -265,4 +265,34 @@ class OpportunityRepository {
     return ApplicationModel.fromFirestore(
         snapshot.docs.first as DocumentSnapshot<Map<String, dynamic>>);
   }
+
+  Stream<List<ApplicationModel>> streamStartupApplications({
+    required String startupId,
+  }) {
+    return _applications
+        .where('startupId', isEqualTo: startupId)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => ApplicationModel.fromFirestore(
+                  doc as DocumentSnapshot<Map<String, dynamic>>))
+              .toList()
+            ..sort((a, b) => b.appliedAt.compareTo(a.appliedAt)),
+        );
+  }
+
+  Future<void> updateApplicationStatus({
+    required String applicationId,
+    required ApplicationStatus newStatus,
+    String? reviewNotes,
+  }) async {
+    final now = DateTime.now().toUtc();
+    final updateData = <String, dynamic>{
+      'status': newStatus.name,
+      'reviewedAt': now,
+      // ignore: use_null_aware_elements
+      if (reviewNotes != null) 'reviewNotes': reviewNotes,
+    };
+    await _applications.doc(applicationId).update(updateData);
+  }
 }
