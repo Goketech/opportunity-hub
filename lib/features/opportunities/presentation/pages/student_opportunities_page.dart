@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:opportunity_hub/features/auth/presentation/state/auth_notifier.dart';
+import 'package:opportunity_hub/features/auth/presentation/state/auth_state.dart';
 import 'package:opportunity_hub/features/opportunities/presentation/state/opportunity_filters.dart';
 import 'package:opportunity_hub/features/opportunities/presentation/state/opportunity_providers.dart';
 import 'package:opportunity_hub/features/opportunities/presentation/widgets/opportunity_card.dart';
@@ -44,6 +46,8 @@ class _StudentOpportunitiesPageState
   Widget build(BuildContext context) {
     final feedAsync = ref.watch(opportunityFeedProvider);
     final filters = ref.watch(opportunityFilterProvider);
+    final authState = ref.watch(authNotifierProvider).valueOrNull;
+    final viewerId = authState is AuthAuthenticated ? authState.profile.id : null;
 
     return Scaffold(
       body: Column(
@@ -140,6 +144,14 @@ class _StudentOpportunitiesPageState
           Expanded(
             child: feedAsync.when(
               data: (items) {
+                if (viewerId != null) {
+                  // Track one impression per opportunity per user per day.
+                  // ignore: discarded_futures
+                  ref
+                      .read(opportunityViewTrackerProvider.notifier)
+                      .trackVisible(items, viewerId: viewerId);
+                }
+
                 if (items.isEmpty) {
                   return const Center(
                     child: Text(

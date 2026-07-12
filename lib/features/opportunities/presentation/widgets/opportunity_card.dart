@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:opportunity_hub/features/auth/presentation/state/auth_notifier.dart';
+import 'package:opportunity_hub/features/auth/presentation/state/auth_state.dart';
 import 'package:opportunity_hub/features/opportunities/domain/models/application_model.dart';
 import 'package:opportunity_hub/features/opportunities/domain/models/opportunity_model.dart';
 import 'package:opportunity_hub/features/opportunities/domain/models/opportunity_view_model.dart';
@@ -26,7 +28,15 @@ class OpportunityCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final applicationStatus = ref.watch(checkApplicationStatusProvider(opportunity.opportunity.id));
+    final authState = ref.watch(authNotifierProvider).valueOrNull;
     final theme = Theme.of(context);
+    final studentSkills = authState is AuthAuthenticated
+        ? authState.profile.skills
+        : const <String>[];
+    final matrix = _buildSkillMatrix(
+      opportunitySkills: opportunity.opportunity.requirements,
+      studentSkills: studentSkills,
+    );
 
     return Card(
       child: Padding(
@@ -91,12 +101,44 @@ class OpportunityCard extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             if (opportunity.opportunity.requirements.isNotEmpty)
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: opportunity.opportunity.requirements
-                    .map((item) => Chip(label: Text(item)))
-                    .toList(),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${matrix.matchPercentage}% Skill Match',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: opportunity.opportunity.requirements.map((item) {
+                      final normalized = item.trim().toLowerCase();
+                      final isMatched = matrix.matchedSkills.contains(normalized);
+                      return Chip(
+                        label: Text(item),
+                        backgroundColor: isMatched
+                            ? Colors.green.shade50
+                            : Colors.grey.shade200,
+                        side: BorderSide(
+                          color: isMatched
+                              ? Colors.green.shade300
+                              : Colors.grey.shade400,
+                        ),
+                        labelStyle: theme.textTheme.bodySmall?.copyWith(
+                          color: isMatched
+                              ? Colors.green.shade900
+                              : Colors.grey.shade800,
+                          fontWeight: isMatched
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
               ),
             const SizedBox(height: 16),
             SizedBox(
@@ -163,6 +205,45 @@ class OpportunityCard extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _SkillMatrix {
+  const _SkillMatrix({
+    required this.matchPercentage,
+    required this.matchedSkills,
+  });
+
+  final int matchPercentage;
+  final Set<String> matchedSkills;
+}
+
+_SkillMatrix _buildSkillMatrix({
+  required List<String> opportunitySkills,
+  required List<String> studentSkills,
+}) {
+  final normalizedOpportunitySkills = opportunitySkills
+      .map((skill) => skill.trim().toLowerCase())
+      .where((skill) => skill.isNotEmpty)
+      .toSet();
+  final normalizedStudentSkills = studentSkills
+      .map((skill) => skill.trim().toLowerCase())
+      .where((skill) => skill.isNotEmpty)
+      .toSet();
+
+  if (normalizedOpportunitySkills.isEmpty) {
+    return const _SkillMatrix(matchPercentage: 100, matchedSkills: <String>{});
+  }
+
+  final matchedSkills =
+      normalizedOpportunitySkills.intersection(normalizedStudentSkills);
+  final percentage =
+      ((matchedSkills.length / normalizedOpportunitySkills.length) * 100)
+          .round();
+
+  return _SkillMatrix(
+    matchPercentage: percentage,
+    matchedSkills: matchedSkills,
+  );
 }
 
 class _MetaChip extends StatelessWidget {

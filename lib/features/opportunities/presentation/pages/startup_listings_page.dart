@@ -4,6 +4,7 @@ import 'package:opportunity_hub/features/auth/presentation/state/auth_notifier.d
 import 'package:opportunity_hub/features/auth/presentation/state/auth_state.dart';
 import 'package:opportunity_hub/features/opportunities/data/opportunity_repository.dart';
 import 'package:opportunity_hub/features/opportunities/domain/models/opportunity_model.dart';
+import 'package:opportunity_hub/features/opportunities/presentation/screens/founder_analytics_screen.dart';
 import 'package:opportunity_hub/features/opportunities/presentation/state/opportunity_providers.dart';
 import 'package:opportunity_hub/features/opportunities/presentation/screens/founder_applications_screen.dart';
 
@@ -20,7 +21,12 @@ class _StartupListingsPageState extends ConsumerState<StartupListingsPage> with 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   @override
@@ -48,6 +54,7 @@ class _StartupListingsPageState extends ConsumerState<StartupListingsPage> with 
           tabs: const [
             Tab(icon: Icon(Icons.list), text: 'Listings'),
             Tab(icon: Icon(Icons.mail), text: 'Applications'),
+            Tab(icon: Icon(Icons.insights), text: 'Analytics'),
           ],
         ),
       ),
@@ -56,6 +63,7 @@ class _StartupListingsPageState extends ConsumerState<StartupListingsPage> with 
         children: [
           _ListingsTab(startupId: startupId),
           const FounderApplicationsScreen(),
+          const FounderAnalyticsScreen(),
         ],
       ),
       floatingActionButton: _tabController.index == 0

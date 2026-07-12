@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:opportunity_hub/features/opportunities/domain/models/application_model.dart';
+import 'package:opportunity_hub/features/opportunities/domain/models/founder_metrics_model.dart';
 import 'package:opportunity_hub/features/opportunities/domain/models/opportunity_model.dart';
 import 'package:opportunity_hub/features/opportunities/domain/models/opportunity_view_model.dart';
 import 'package:opportunity_hub/features/opportunities/presentation/state/opportunity_filters.dart';
@@ -196,6 +197,12 @@ class OpportunityRepository {
   CollectionReference<Map<String, dynamic>> get _applications =>
       _firestore.collection('applications');
 
+    CollectionReference<Map<String, dynamic>> get _startupMetrics =>
+      _firestore.collection('startup_metrics');
+
+      CollectionReference<Map<String, dynamic>> get _opportunityViewEvents =>
+        _firestore.collection('opportunity_view_events');
+
   Future<void> submitApplication({
     required String opportunityId,
     required String studentId,
@@ -216,6 +223,53 @@ class OpportunityRepository {
     );
 
     await _applications.doc(id).set(application.toFirestore());
+    await _incrementStartupCounter(startupId: startupId, field: 'totalApplications');
+  }
+
+  Future<void> incrementOpportunityViewCount({
+    required String startupId,
+    required String opportunityId,
+    required String viewerId,
+    required String viewDateKey,
+  }) async {
+    final trackingId = '${opportunityId}_${viewerId}_$viewDateKey';
+    final trackingDoc = _opportunityViewEvents.doc(trackingId);
+    final metricsDoc = _startupMetrics.doc(startupId);
+
+    await _firestore.runTransaction((transaction) async {
+      final existing = await transaction.get(trackingDoc);
+      if (existing.exists) {
+        return;
+      }
+
+      transaction.set(trackingDoc, {
+        'id': trackingId,
+        'startupId': startupId,
+        'opportunityId': opportunityId,
+        'viewerId': viewerId,
+        'viewDateKey': viewDateKey,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      transaction.set(metricsDoc, {
+        'startupId': startupId,
+        'totalViews': FieldValue.increment(1),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    });
+  }
+
+  Stream<FounderMetricsModel> streamStartupMetrics({
+    required String startupId,
+  }) {
+    return _startupMetrics.doc(startupId).snapshots().map((snapshot) {
+      final data = snapshot.data();
+      return FounderMetricsModel(
+        startupId: startupId,
+        totalViews: (data?['totalViews'] as num?)?.toInt() ?? 0,
+        totalApplications: (data?['totalApplications'] as num?)?.toInt() ?? 0,
+      );
+    });
   }
 
   Stream<List<ApplicationModel>> streamStudentApplications({
@@ -294,5 +348,16 @@ class OpportunityRepository {
       if (reviewNotes != null) 'reviewNotes': reviewNotes,
     };
     await _applications.doc(applicationId).update(updateData);
+  }
+
+  Future<void> _incrementStartupCounter({
+    required String startupId,
+    required String field,
+  }) async {
+    await _startupMetrics.doc(startupId).set({
+      'startupId': startupId,
+      field: FieldValue.increment(1),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 }
