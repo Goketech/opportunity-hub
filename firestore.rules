@@ -13,19 +13,55 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(uid));
     }
 
-    function isFounder(uid) {
-      return userDoc(uid).data.role == 'startup_founder';
+    function userExists(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid));
     }
 
-    function hasStartup(uid) {
-      return userDoc(uid).data.startupId is string && userDoc(uid).data.startupId.size() > 0;
+    function myUserDoc() {
+      return userDoc(request.auth.uid);
+    }
+
+    function isStudent() {
+      return isSignedIn()
+        && userExists(request.auth.uid)
+        && myUserDoc().data.role == 'student';
+    }
+
+    function isFounder() {
+      return isSignedIn()
+        && userExists(request.auth.uid)
+        && myUserDoc().data.role == 'startup_founder';
+    }
+
+    function myStartupId() {
+      return myUserDoc().data.startupId;
+    }
+
+    function hasStartupLink() {
+      return myStartupId() is string && myStartupId().size() > 0;
     }
 
     function isStartupFounderFor(startupId) {
-      return isSignedIn()
-        && isFounder(request.auth.uid)
-        && hasStartup(request.auth.uid)
-        && userDoc(request.auth.uid).data.startupId == startupId;
+      return isFounder()
+        && hasStartupLink()
+        && myStartupId() == startupId;
+    }
+
+    function startupDoc(startupId) {
+      return get(/databases/$(database)/documents/startups/$(startupId));
+    }
+
+    function startupExists(startupId) {
+      return exists(/databases/$(database)/documents/startups/$(startupId));
+    }
+
+    function isVerifiedStartup(startupId) {
+      return startupExists(startupId)
+        && startupDoc(startupId).data.isAluVerified == true;
+    }
+
+    function opportunityDoc(opportunityId) {
+      return get(/databases/$(database)/documents/opportunities/$(opportunityId));
     }
 
     function hasAllowedUserKeys() {
@@ -63,6 +99,40 @@ service cloud.firestore {
       ]);
     }
 
+    function hasAllowedOpportunityKeys() {
+      return request.resource.data.keys().hasOnly([
+        'id',
+        'startupId',
+        'title',
+        'category',
+        'description',
+        'requirements',
+        'duration',
+        'compensationType',
+        'screeningQuestions',
+        'isOpen',
+        'createdAt',
+        'updatedAt',
+      ]);
+    }
+
+    function hasAllowedApplicationKeys() {
+      return request.resource.data.keys().hasOnly([
+        'opportunityId',
+        'studentId',
+        'startupId',
+        'answers',
+        'status',
+        'appliedAt',
+        'reviewedAt',
+        'reviewNotes',
+      ]);
+    }
+
+    function isValidApplicationStatus(status) {
+      return status in ['submitted', 'reviewed', 'accepted', 'rejected', 'withdrawn'];
+    }
+
     match /users/{uid} {
       allow read: if isOwner(uid);
 
@@ -77,20 +147,34 @@ service cloud.firestore {
         && request.resource.data.aluEmail == resource.data.aluEmail
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.role == resource.data.role
-        && request.resource.data.startupId == resource.data.startupId;
+        && (
+          request.resource.data.startupId == resource.data.startupId
+          || (
+            resource.data.role == 'startup_founder'
+            && (
+              resource.data.startupId == null
+              || resource.data.startupId == ''
+            )
+            && request.resource.data.startupId is string
+            && request.resource.data.startupId.size() > 0
+          )
+        );
+
+      allow delete: if false;
     }
 
     match /startup_verification_registry/{token} {
-      allow read: if false;
-      allow write: if false;
+      allow read, write: if false;
     }
 
     match /startups/{startupId} {
-      allow read: if isSignedIn();
+      // Students can only read verified startups.
+      // Founders can read their own startup document.
+      allow read: if (isStudent() && resource.data.isAluVerified == true)
+        || isStartupFounderFor(startupId);
 
-      allow create: if isSignedIn()
-        && isFounder(request.auth.uid)
-        && !hasStartup(request.auth.uid)
+      allow create: if isFounder()
+        && !hasStartupLink()
         && hasAllowedStartupKeys()
         && request.resource.data.id == startupId
         && request.resource.data.founderIds.hasOnly([request.auth.uid]);
@@ -98,31 +182,28 @@ service cloud.firestore {
       allow update: if isStartupFounderFor(startupId)
         && hasAllowedStartupKeys()
         && request.resource.data.id == resource.data.id
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.founderIds == resource.data.founderIds;
 
       allow delete: if false;
     }
 
     match /opportunities/{opportunityId} {
-      allow read: if isSignedIn();
-      allow create, update: if isStartupFounderFor(request.resource.data.startupId);
+      // Student reads are restricted to verified startups only.
+      allow read: if (isStudent() && isVerifiedStartup(resource.data.startupId))
+        || isStartupFounderFor(resource.data.startupId);
+
+      allow create: if isStartupFounderFor(request.resource.data.startupId)
+        && hasAllowedOpportunityKeys()
+        && request.resource.data.id == opportunityId;
+
+      allow update: if isStartupFounderFor(resource.data.startupId)
+        && hasAllowedOpportunityKeys()
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.startupId == resource.data.startupId
+        && request.resource.data.createdAt == resource.data.createdAt;
+
       allow delete: if isStartupFounderFor(resource.data.startupId);
-
-      match /applications/{applicationId} {
-        allow read: if isSignedIn() && (
-          request.auth.uid == resource.data.studentId
-          || isStartupFounderFor(resource.data.startupId)
-        );
-
-        allow create: if isSignedIn()
-          && request.resource.data.studentId == request.auth.uid
-          && request.resource.data.status == 'pending';
-
-        allow update: if isStartupFounderFor(resource.data.startupId)
-          && request.resource.data.studentId == resource.data.studentId
-          && request.resource.data.opportunityId == resource.data.opportunityId
-          && request.resource.data.startupId == resource.data.startupId;
-      }
     }
 
     match /applications/{applicationId} {
@@ -131,16 +212,108 @@ service cloud.firestore {
         || isStartupFounderFor(resource.data.startupId)
       );
 
-      allow create: if isSignedIn()
+      // Students can only create their own applications against verified startup opportunities.
+      allow create: if isStudent()
+        && hasAllowedApplicationKeys()
         && request.resource.data.studentId == request.auth.uid
-        && request.resource.data.status == 'pending';
+        && request.resource.data.status == 'submitted'
+        && request.resource.data.reviewedAt == null
+        && (
+          request.resource.data.reviewNotes == null
+          || request.resource.data.reviewNotes == ''
+        )
+        && exists(/databases/$(database)/documents/opportunities/$(request.resource.data.opportunityId))
+        && opportunityDoc(request.resource.data.opportunityId).data.startupId == request.resource.data.startupId
+        && isVerifiedStartup(request.resource.data.startupId);
 
+      // Founders can review applications only for their startup and cannot mutate ownership fields.
       allow update: if isStartupFounderFor(resource.data.startupId)
+        && hasAllowedApplicationKeys()
         && request.resource.data.studentId == resource.data.studentId
         && request.resource.data.opportunityId == resource.data.opportunityId
-        && request.resource.data.startupId == resource.data.startupId;
+        && request.resource.data.startupId == resource.data.startupId
+        && request.resource.data.appliedAt == resource.data.appliedAt
+        && isValidApplicationStatus(request.resource.data.status);
 
       allow delete: if false;
+    }
+
+    match /startup_metrics/{startupId} {
+      // Founder analytics are private to the owning startup.
+      allow read: if isStartupFounderFor(startupId);
+
+      // Counter writes are allowed for signed-in clients, but constrained to
+      // startupId + updatedAt + single-step increments on tracked counters.
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly([
+          'startupId',
+          'totalViews',
+          'totalApplications',
+          'updatedAt',
+        ])
+        && request.resource.data.startupId == startupId
+        && request.resource.data.updatedAt == request.time
+        && (
+          (
+            request.resource.data.totalViews == 1
+            && (
+              !('totalApplications' in request.resource.data)
+              || request.resource.data.totalApplications == 0
+            )
+          )
+          ||
+          (
+            request.resource.data.totalApplications == 1
+            && (
+              !('totalViews' in request.resource.data)
+              || request.resource.data.totalViews == 0
+            )
+          )
+        );
+
+      allow update: if isSignedIn()
+        && request.resource.data.startupId == resource.data.startupId
+        && request.resource.data.startupId == startupId
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.totalViews is int
+        && request.resource.data.totalApplications is int
+        && (
+          (
+            request.resource.data.totalViews == resource.data.totalViews + 1
+            && request.resource.data.totalApplications == resource.data.totalApplications
+          )
+          ||
+          (
+            request.resource.data.totalApplications == resource.data.totalApplications + 1
+            && request.resource.data.totalViews == resource.data.totalViews
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    match /opportunity_view_events/{eventId} {
+      // Event docs are write-only for clients; analytics should read aggregated metrics.
+      allow read: if false;
+
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly([
+          'id',
+          'startupId',
+          'opportunityId',
+          'viewerId',
+          'viewDateKey',
+          'createdAt',
+        ])
+        && request.resource.data.id == eventId
+        && request.resource.data.viewerId == request.auth.uid
+        && request.resource.data.viewDateKey.matches('^[0-9]{8}$')
+        && exists(/databases/$(database)/documents/opportunities/$(request.resource.data.opportunityId))
+        && opportunityDoc(request.resource.data.opportunityId).data.startupId == request.resource.data.startupId
+        && isVerifiedStartup(request.resource.data.startupId)
+        && request.resource.data.createdAt == request.time;
+
+      allow update, delete: if false;
     }
   }
 }

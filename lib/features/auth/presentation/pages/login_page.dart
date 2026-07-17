@@ -85,7 +85,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               final email = (value ?? '').trim().toLowerCase();
                               final isValidDomain =
                                   email.endsWith('@alueducation.com') ||
-                                  email.endsWith('@alu.edu');
+                                  email.endsWith('@alu.edu') ||
+                                  email.endsWith('@alustudent.com');
                               if (email.isEmpty) {
                                 return 'Email is required.';
                               }

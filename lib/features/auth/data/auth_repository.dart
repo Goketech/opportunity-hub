@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:opportunity_hub/features/auth/domain/models/user_profile.dart';
 
@@ -18,47 +19,99 @@ class AuthRepository {
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
 
-  static const List<String> _allowedDomains = ['alueducation.com', 'alu.edu'];
+  static const List<String> _allowedDomains = ['alueducation.com', 'alu.edu', 'alustudent.com'];
 
   User? get currentUser => _auth.currentUser;
 
   Stream<User?> authStateChanges() => _auth.authStateChanges();
 
+  void _log(String message) {
+    debugPrint('[AuthRepository] $message');
+  }
+
   Future<void> signIn({required String email, required String password}) async {
-    _enforceAluEmail(email);
-    await _auth.signInWithEmailAndPassword(email: email.trim(), password: password);
-    final activeEmail = _auth.currentUser?.email ?? '';
-    if (!_isAluEmail(activeEmail)) {
-      await _auth.signOut();
-      throw FirebaseAuthException(
-        code: 'invalid-domain',
-        message: 'Only ALU email domains are allowed.',
+    try {
+      _log('signIn start for email=$email');
+      _enforceAluEmail(email);
+      await _auth.signInWithEmailAndPassword(email: email.trim(), password: password);
+      final activeEmail = _auth.currentUser?.email ?? '';
+      if (!_isAluEmail(activeEmail)) {
+        await _auth.signOut();
+        throw FirebaseAuthException(
+          code: 'invalid-domain',
+          message: 'Only ALU email domains are allowed.',
+        );
+      }
+      _log('signIn success uid=${_auth.currentUser?.uid}');
+    } on FirebaseAuthException catch (error) {
+      _log(
+        'signIn FirebaseAuthException code=${error.code} message=${error.message}',
       );
+      throw _withActionableMessage(error, operation: 'signIn');
     }
   }
 
-  Future<void> signUp({required String email, required String password}) async {
-    _enforceAluEmail(email);
-    await _auth.createUserWithEmailAndPassword(
-      email: email.trim().toLowerCase(),
-      password: password,
+  Future<UserCredential> signUp({required String email, required String password}) async {
+    try {
+      _log('signUp start for email=$email');
+      _enforceAluEmail(email);
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: email.trim().toLowerCase(),
+        password: password,
+      );
+      _log('signUp success uid=${credential.user?.uid}');
+      return credential;
+    } on FirebaseAuthException catch (error) {
+      _log(
+        'signUp FirebaseAuthException code=${error.code} message=${error.message}',
+      );
+      throw _withActionableMessage(error, operation: 'signUp');
+    }
+  }
+
+  FirebaseAuthException _withActionableMessage(
+    FirebaseAuthException error, {
+    required String operation,
+  }) {
+    if (error.code != 'internal-error') {
+      return error;
+    }
+
+    final original = error.message ?? 'No message from Firebase Auth iOS SDK.';
+    return FirebaseAuthException(
+      code: error.code,
+      message:
+          'Firebase Authentication internal-error during $operation. '
+          'Check Firebase Console: Authentication is enabled, Email/Password sign-in is enabled, '
+          'and iOS app bundle id matches GoogleService-Info.plist. Original: $original',
     );
   }
 
   Future<void> signOut() => _auth.signOut();
 
   Future<UserProfile?> fetchUserProfile(String uid) async {
-    final snapshot = await _firestore.collection('users').doc(uid).get();
-    if (!snapshot.exists) {
-      return null;
-    }
+    try {
+      _log('fetchUserProfile start uid=$uid');
+      final snapshot = await _firestore.collection('users').doc(uid).get();
+      if (!snapshot.exists) {
+        _log('fetchUserProfile no document for uid=$uid');
+        return null;
+      }
 
-    final data = snapshot.data();
-    if (data == null) {
-      return null;
-    }
+      final data = snapshot.data();
+      if (data == null) {
+        _log('fetchUserProfile empty data for uid=$uid');
+        return null;
+      }
 
-    return UserProfile.fromJson({'id': uid, ...data});
+      _log('fetchUserProfile success uid=$uid');
+      return UserProfile.fromJson({'id': uid, ...data});
+    } on FirebaseException catch (error) {
+      _log(
+        'fetchUserProfile FirebaseException code=${error.code} message=${error.message}',
+      );
+      rethrow;
+    }
   }
 
   Future<void> completeStudentOnboarding({

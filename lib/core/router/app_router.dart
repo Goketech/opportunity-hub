@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:opportunity_hub/features/auth/data/auth_repository.dart';
 import 'package:opportunity_hub/features/auth/domain/models/user_profile.dart';
 import 'package:opportunity_hub/features/auth/presentation/pages/login_page.dart';
 import 'package:opportunity_hub/features/auth/presentation/pages/onboarding_page.dart';
@@ -21,6 +22,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final location = state.matchedLocation;
       final authAsync = ref.read(authNotifierProvider);
+
+      if (authAsync.hasError) {
+        final activeUser = ref.read(authRepositoryProvider).currentUser;
+        if (activeUser != null && activeUser.email != null) {
+          return location == AppRoutes.onboarding ? null : AppRoutes.onboarding;
+        }
+
+        if (location == AppRoutes.login || location == AppRoutes.signup) {
+          return null;
+        }
+        return AppRoutes.login;
+      }
 
       if (authAsync.isLoading) {
         return location == AppRoutes.splash ? null : AppRoutes.splash;
@@ -337,7 +350,7 @@ class _RouterRefreshListenable extends ChangeNotifier {
     _subscription = ref.listen<AsyncValue<AuthState>>(
       authNotifierProvider,
       (previous, next) => notifyListeners(),
-      fireImmediately: false,
+      fireImmediately: true,
     );
   }
 
